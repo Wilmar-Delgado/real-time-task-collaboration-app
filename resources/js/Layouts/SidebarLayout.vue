@@ -164,10 +164,4 @@ const user = usePage().props.auth.user;
 .topbar-user {
     color: #6b7280;
 }
-
-/* Page content area */
-.content-area {
-    flex: 1;
-    padding: 24px;
-}
 </style>

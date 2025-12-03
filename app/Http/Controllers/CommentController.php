@@ -4,36 +4,36 @@ namespace App\Http\Controllers;
 
 use App\Models\Comment;
 use Illuminate\Http\Request;
+use App\Services\CommentService;
+use App\Http\Requests\TaskStoreRequest;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\CommentUpdateRequest;
 
 class CommentController extends Controller
 {
-    public function index() {
+    protected $commentService;
+
+    public function __construct(CommentService $commentService)
+    {
+        $this->commentService = $commentService;
+    }
+
+    public function index() 
+    {
         return response()->json(Comment::all());
     }
 
-    public function show($id) {
+    public function show($id) 
+    {
         $comment = Comment::findOrFail($id);
         return response()->json($comment);
     }
 
-    public function store(Request $request) {
-        $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'task_id' => 'required|exists:tasks,id',
-            'body'    => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([$validator->errors(), 422]);
-        }
-
-        // $comment = new Comment();
-        // $comment->user_id = $request->user_id;
-        // $comment->task_id = $request->task_id;
-        // $comment->body = $request->body;
-        // $comment->save();
-         $comment = Comment::create($validator->validated());
+    public function store(TaskStoreRequest $request) 
+    {
+        // Validation logic can be added here if not using Form Requests
+        
+        $comment = $this->commentService->createComment($request->validated());
 
         return response()->json([
             'message' => 'Comment created sucessfully',
@@ -41,24 +41,13 @@ class CommentController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, $id) {
+    public function update(CommentUpdateRequest $request, $id) 
+    {
         $comment = Comment::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'task_id' => 'required|exists:tasks,id',
-            'body'    => 'required|string',
-        ]);
+        // Validation logic can be added here if not using Form Requests
 
-        if ($validator->fails()) {
-            return response()->json([$validator->errors(), 422]);
-        }
-
-        // $comment->user_id = $request->user_id;
-        // $comment->task_id = $request->task_id;
-        // $comment->body = $request->body;
-        // $comment->save();
-        $comment->update($validator->validated());
+        $comment = $this->commentService->updateComment($comment, $request->validated());
 
         return response()->json([
             'message' => 'Comment updated successfully',
@@ -66,7 +55,8 @@ class CommentController extends Controller
         ], 200);
     }
 
-    public function destroy($id) {
+    public function destroy($id) 
+    {
         $comment = Comment::findOrFail($id);
         $comment->delete();
 
