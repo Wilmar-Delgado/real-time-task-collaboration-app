@@ -17,60 +17,26 @@ const props = defineProps({
 });
 
 // EMITS 
-const emit = defineEmits(['task-created', 'task-moved']);
+const emit = defineEmits(['task-action', 'task-moved']);
 
 // STATE
 const showModal = ref(false);
 const columns = ref({});
-const loading = ref(false);
-let originalTasks = new Set();
-
 const action = ref('Create');
 const modalTitle = ref('New Task');
 
 // COMPUTED
-const title = computed(() => {
-  return action.value + ' ' + modalTitle.value;
-});
-
 const boardTitle = computed(() => {
   return props.config.title;
 });
 
 // FUNCTIONS
 const newTask = ref({
-  'created_by': 22,
+  'created_by': 4,
   'title': '',
   'description': '',
   'status': 'open',
 });
-
-const createTask = async () => {
-  loading.value = true;
-
-  await fetch("http://127.0.0.1:8000/api/tasks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(newTask.value),
-  });
-
-  loading.value = false;
-  showModal.value = false;
-  
-  await fetchTasks();
-  refreshOriginalTasksSnapshot();
-
-  // Emit to parent
-  emit('task-created', newTask.value.title);
-
-  // Reset form
-  newTask.value = {
-    'created_by': 22,
-    'title': '',
-    'description': '',
-    'status': 'open',
-  };
-}
 
 const fetchTasks = async () => {
   const res = await fetch("http://127.0.0.1:8000/api/tasks");
@@ -88,10 +54,69 @@ const fetchTasks = async () => {
   columns.value = groups;
 };
 
-const refreshOriginalTasksSnapshot = () => {
-  originalTasks = new Set(
-    Object.values(columns.value).flat().map(t => t.id)
-  );
+const saveTask = async () => {
+  if (action.value === "Create") {
+    await fetch("http://127.0.0.1:8000/api/tasks", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(newTask.value),
+    });
+  } else {
+    await fetch(`http://127.0.0.1:8000/api/tasks/${newTask.value.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newTask.value),
+    });
+  }
+
+  showModal.value = false;
+  
+  await fetchTasks(); // Refresh the board after creating/updating
+
+  // Emit to parent
+  emit('task-action', {
+      title: newTask.value.title,
+      type: action.value === "Create" ? "created" : "updated"
+  });
+
+  // Reset form
+  resetForm();
+};
+
+const editTask = (task) => {
+  action.value = "Update";
+  modalTitle.value = "Edit Task";
+
+  newTask.value = {
+    id: task.id,
+    created_by: task.created_by,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+  };
+
+  showModal.value = true;
+};
+
+const deleteTask = async (task) => {
+  if (!confirm(`Are you sure you want to delete task "${task.title}"?`)) {
+    return;
+  }
+
+  await fetch(`http://127.0.0.1:8000/api/tasks/${task.id}`, {
+    method: "DELETE"
+  });
+
+  await fetchTasks(); // Refresh the board after deleting
+
+  // Emit event to parent
+  emit("task-action", {
+    title: task.title,
+    type: "deleted"
+  });
 };
 
 const onTaskMoved = async (event, newStatus) => {
@@ -108,13 +133,9 @@ const onTaskMoved = async (event, newStatus) => {
 
   // Emit to parent
   emit('task-moved', movedTask.title);
-
-  refreshOriginalTasksSnapshot();
 };
 
 const exportTasks = async () => {
-  loading.value = true;
-
   const res = await fetch("http://127.0.0.1:8000/api/tasks/export", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -122,9 +143,18 @@ const exportTasks = async () => {
 
   const data = await res.json();
   alert(data.message);
-
-  loading.value = false;
 }
+
+const resetForm = () => {
+  newTask.value = {
+    created_by: 4,
+    title: "",
+    description: "",
+    status: "open",
+  };
+  action.value = "Create";
+  modalTitle.value = "New Task";
+};
 
 const formatStatus = (status) => {
   return status
@@ -135,13 +165,14 @@ const formatStatus = (status) => {
 // LIFECYCLE HOOKS
 onMounted(async () => {
   await fetchTasks();
-  refreshOriginalTasksSnapshot();
 });
 </script>
 
 <template>
   <h1> {{ boardTitle }} </h1> <!-- props example -->
-  <button class="create-btn" v-on:click="showModal = true">+ Create Task</button>
+  <button class="create-btn" @click="resetForm(); showModal = true">
+    + Create Task
+  </button>
   <button class="export-btn" v-on:click="exportTasks">Export Tasks</button>
   <div class="kanban-container">
     <div 
@@ -161,6 +192,14 @@ onMounted(async () => {
         <template #item="{ element }">
           <div class="kanban-task">
             {{ element.title }}
+            <button 
+              class="edit-btn"
+              v-on:click="editTask(element)"
+            >✏️</button>
+            <button 
+              class="delete-btn"
+              v-on:click="deleteTask(element)"
+            >🗑️</button>
           </div>
         </template>
       </draggable>
@@ -168,7 +207,7 @@ onMounted(async () => {
   </div>
   <div v-if="showModal" class="modal-overlay">
     <div class="modal-box">
-      <h2> {{ title }}</h2> <!-- computed example -->
+      <h2>{{ modalTitle }}</h2>
 
       <label>Title</label>
       <input v-model="newTask.title" type="text" />
@@ -184,8 +223,8 @@ onMounted(async () => {
       </select>
 
       <div class="modal-actions">
-        <button v-on:click="createTask">Create</button>
-        <button v-on:click="showModal = false">Cancel</button>
+        <button v-on:click="saveTask">{{ action }}</button>
+        <button v-on:click="showModal = false; resetForm();">Cancel</button>
       </div>
     </div>
   </div>
@@ -201,7 +240,7 @@ onMounted(async () => {
   padding: 10px;
   border: 1px solid black;
   width: 300px;
-  max-height: 80vh;
+  max-height: 60vh;
   overflow-y: auto;
   background: #f8f8f8;
   border-radius: 6px;
@@ -215,7 +254,7 @@ onMounted(async () => {
 }
 
 h1 {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   font-size: 24px;
 }
 
@@ -237,6 +276,14 @@ h1 {
   color: white;
   border: none;
   border-radius: 6px;
+  cursor: pointer;
+}
+
+.edit-btn, .delete-btn {
+  font-size: 10px;
+  float: right;
+  background: transparent;
+  border: none;
   cursor: pointer;
 }
 

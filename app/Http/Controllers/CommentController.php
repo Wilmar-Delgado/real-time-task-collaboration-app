@@ -3,10 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comment;
-use Illuminate\Http\Request;
 use App\Services\CommentService;
 use App\Http\Requests\TaskStoreRequest;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Resources\CommentResource;
 use App\Http\Requests\CommentUpdateRequest;
 
 class CommentController extends Controller
@@ -20,13 +19,15 @@ class CommentController extends Controller
 
     public function index() 
     {
-        return response()->json(Comment::all());
+        // return response()->json(Comment::all());
+        return CommentResource::collection(Comment::paginate(10));
     }
 
     public function show($id) 
     {
         $comment = Comment::findOrFail($id);
-        return response()->json($comment);
+        // return response()->json($comment);
+        return new CommentResource($comment);
     }
 
     public function store(TaskStoreRequest $request) 
@@ -37,7 +38,7 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'Comment created sucessfully',
-            'comment' => $comment
+            'comment' => new CommentResource($comment)
         ], 201);
     }
 
@@ -51,7 +52,7 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'Comment updated successfully',
-            'comment' => $comment
+            'comment' => new CommentResource($comment)
         ], 200);
     }
 

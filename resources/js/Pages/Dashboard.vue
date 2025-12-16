@@ -10,8 +10,8 @@ const kanbanConfig = {
   colorTheme: "purple",
 };
 
-const handleTaskCreated = (taskTitle) => {
-  alert('New task created:' + taskTitle);
+const handleTaskAction = ({ title, type }) => {
+  alert(`Task "${title}" was ${type}.`);
 };
 
 const handleTaskMoved = (taskTitle) => {
@@ -29,7 +29,7 @@ const handleTaskMoved = (taskTitle) => {
 
         <!-- Full-width content, no padding, no card -->
         <div class="p-6">
-            <KanbanBoard v-bind:config="kanbanConfig" @task-created="handleTaskCreated" @task-moved="handleTaskMoved"/>
+            <KanbanBoard v-bind:config="kanbanConfig" @task-action="handleTaskAction" @task-moved="handleTaskMoved"/>
         </div>
     </SidebarLayout>
 </template>

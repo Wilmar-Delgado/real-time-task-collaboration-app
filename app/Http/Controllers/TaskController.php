@@ -6,9 +6,9 @@ use App\Models\Task;
 use App\Jobs\ExportTaskJob;
 use Illuminate\Http\Request;
 use App\Services\TaskService;
+use App\Http\Resources\TaskResource;
 use App\Http\Requests\TaskStoreRequest;
 use App\Http\Requests\TaskUpdateRequest;
-use Illuminate\Support\Facades\Validator;
 
 class TaskController extends Controller
 {
@@ -19,25 +19,36 @@ class TaskController extends Controller
         $this->taskService = $taskService;
     }
 
-    public function index() 
+    public function index(Request $request) 
     {
-        return response()->json(Task::all());
+        $query = Task::query();
+
+        if (!empty($request->created_by)) {
+            $query->where('created_by', $request->created_by);
+        }
+
+        //with() is used to eager load relationships before the main query is executed
+        $tasks = $query->with('comments')->get();
+
+        return response()->json(TaskResource::collection($tasks));
     }
 
     public function show($id) {
         $task = Task::findOrFail($id);
-        return response()->json($task);
+        // return response()->json($task);
+        return new TaskResource($task);
     }
 
     public function store(TaskStoreRequest $request) 
     {
-        // Validation logic can be added here if not using Form Requests
-        
         $task = $this->taskService->createTask($request->validated());
+
+        // Use load() to get the 'user' data efficiently *after* creation
+        $task->load('creator'); 
 
         return response()->json([
             'message' => 'Task created sucessfully',
-            'task'    => $task
+            'task'    => new TaskResource($task)
         ], 201);
     }
 
@@ -45,13 +56,11 @@ class TaskController extends Controller
     {
         $task = Task::findOrFail($id);
 
-        // Validation logic can be added here if not using Form Requests
-
         $task = $this->taskService->updateTask($task, $request->validated());
 
         return response()->json([
             'message' => 'Task updated successfully',
-            'task'    => $task
+            'task'    => new TaskResource($task)
         ], 200);
     }
 
