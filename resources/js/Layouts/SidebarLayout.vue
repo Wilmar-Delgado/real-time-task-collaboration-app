@@ -25,11 +25,11 @@ const user = usePage().props.auth.user;
                 </Link>
 
                 <Link
-                    :href="route('profile.edit')"
+                    :href="route('users.index')"
                     class="nav-link"
-                    :class="{ active: $page.url.startsWith('/profile') }"
+                    :class="{ active: $page.url.startsWith('/users') }"
                 >
-                    Profile
+                    Users
                 </Link>
             </nav>
 

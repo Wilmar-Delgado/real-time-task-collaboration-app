@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Validator;
 class UserController extends Controller
 {
     public function index() {
-        return response()->json(User::all());
+        return response()->json(
+            User::select('id', 'name', 'email')->get()
+        );
     }
 
     public function show($id) {

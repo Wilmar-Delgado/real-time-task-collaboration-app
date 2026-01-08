@@ -1,183 +1,163 @@
 <script setup>
 import draggable from 'vuedraggable'
-import { ref, onMounted, computed } from "vue";
+import { ref, computed, onMounted } from 'vue'
+import { useTasks } from '@/composables/useTasks'
+import { formatStatus } from '@/utils/format'
 
-// PROPS
+// ─────────────────────────────
+// PROPS & EMITS
+// ─────────────────────────────
 const props = defineProps({
   config: {
     type: Object,
     required: true,
     default: () => ({
-      title: "Untitled Kanban",
+      title: 'Untitled Kanban',
       allowExport: true,
       allowCreate: true,
-      colorTheme: "gray",
     }),
   },
-});
+})
 
-// EMITS 
-const emit = defineEmits(['task-action', 'task-moved']);
+const emit = defineEmits(['task-action', 'task-moved'])
 
+// ─────────────────────────────
+// COMPOSABLE (TASK LOGIC)
+// ─────────────────────────────
+const {
+  columns,
+  fetchTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+  moveTask,
+  exportTasks,
+} = useTasks()
+
+// ─────────────────────────────
 // STATE
-const showModal = ref(false);
-const columns = ref({});
-const action = ref('Create');
-const modalTitle = ref('New Task');
+// ─────────────────────────────
+const showModal = ref(false)
+const action = ref('Create')
+const modalTitle = ref('New Task')
+const loading = ref(false)
 
-// COMPUTED
-const boardTitle = computed(() => {
-  return props.config.title;
-});
-
-// FUNCTIONS
 const newTask = ref({
-  'created_by': 4,
-  'title': '',
-  'description': '',
-  'status': 'open',
-});
+  created_by: 4,
+  title: '',
+  description: '',
+  status: 'open',
+})
 
-const fetchTasks = async () => {
-  const res = await fetch("http://127.0.0.1:8000/api/tasks");
-  const tasks = await res.json();
+// ─────────────────────────────
+// COMPUTED
+// ─────────────────────────────
+const boardTitle = computed(() => props.config.title)
 
-  const groups = {};
-
-  tasks.forEach(task => {
-    if (!groups[task.status]) {
-      groups[task.status] = [];
-    }
-    groups[task.status].push(task);
-  });
-
-  columns.value = groups;
-};
-
+// ─────────────────────────────
+// ACTIONS
+// ─────────────────────────────
 const saveTask = async () => {
-  if (action.value === "Create") {
-    await fetch("http://127.0.0.1:8000/api/tasks", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify(newTask.value),
-    });
+  if (action.value === 'Create') {
+    await createTask(newTask.value)
   } else {
-    await fetch(`http://127.0.0.1:8000/api/tasks/${newTask.value.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newTask.value),
-    });
+    await updateTask(newTask.value)
   }
 
-  showModal.value = false;
-  
-  await fetchTasks(); // Refresh the board after creating/updating
-
-  // Emit to parent
   emit('task-action', {
-      title: newTask.value.title,
-      type: action.value === "Create" ? "created" : "updated"
-  });
+    title: newTask.value.title,
+    type: action.value === 'Create' ? 'created' : 'updated',
+  })
 
-  // Reset form
-  resetForm();
-};
-
-const editTask = (task) => {
-  action.value = "Update";
-  modalTitle.value = "Edit Task";
-
-  newTask.value = {
-    id: task.id,
-    created_by: task.created_by,
-    title: task.title,
-    description: task.description,
-    status: task.status,
-  };
-
-  showModal.value = true;
-};
-
-const deleteTask = async (task) => {
-  if (!confirm(`Are you sure you want to delete task "${task.title}"?`)) {
-    return;
-  }
-
-  await fetch(`http://127.0.0.1:8000/api/tasks/${task.id}`, {
-    method: "DELETE"
-  });
-
-  await fetchTasks(); // Refresh the board after deleting
-
-  // Emit event to parent
-  emit("task-action", {
-    title: task.title,
-    type: "deleted"
-  });
-};
-
-const onTaskMoved = async (event, newStatus) => {
-  if (!event.added) return;
-
-  const movedTask = event.added.element;
-  movedTask.status = newStatus;
-
-  await fetch(`http://127.0.0.1:8000/api/tasks/${movedTask.id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(movedTask),
-  });
-
-  // Emit to parent
-  emit('task-moved', movedTask.title);
-};
-
-const exportTasks = async () => {
-  const res = await fetch("http://127.0.0.1:8000/api/tasks/export", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-
-  const data = await res.json();
-  alert(data.message);
+  resetForm()
+  showModal.value = false
 }
 
+const editTask = (task) => {
+  action.value = 'Update'
+  modalTitle.value = 'Edit Task'
+
+  newTask.value = { ...task }
+  showModal.value = true
+}
+
+const handleDelete = async (task) => {
+  if (!confirm(`Delete "${task.title}"?`)) return
+
+  await deleteTask(task)
+
+  emit('task-action', {
+    title: task.title,
+    type: 'deleted',
+  })
+}
+
+const onTaskMoved = async (event, newStatus) => {
+  if (!event.added) return
+
+  const movedTask = event.added.element
+  await moveTask(movedTask, newStatus)
+
+  emit('task-moved', movedTask.title)
+}
+
+const handleExport = async () => {
+  const res = await exportTasks()
+  alert(res.message)
+}
+
+// ─────────────────────────────
+// UTIL
+// ─────────────────────────────
 const resetForm = () => {
   newTask.value = {
     created_by: 4,
-    title: "",
-    description: "",
-    status: "open",
-  };
-  action.value = "Create";
-  modalTitle.value = "New Task";
-};
+    title: '',
+    description: '',
+    status: 'open',
+  }
 
-const formatStatus = (status) => {
-  return status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, c => c.toUpperCase());
-};
+  action.value = 'Create'
+  modalTitle.value = 'New Task'
+}
 
-// LIFECYCLE HOOKS
+// ─────────────────────────────
+// LIFECYCLE
+// ─────────────────────────────
 onMounted(async () => {
-  await fetchTasks();
-});
+  loading.value = true
+  await fetchTasks()
+  loading.value = false
+})
 </script>
 
 <template>
-  <h1> {{ boardTitle }} </h1> <!-- props example -->
-  <button class="create-btn" @click="resetForm(); showModal = true">
+  <!-- <h1>{{ boardTitle }}</h1> -->
+
+  <button
+    v-if="config.allowCreate"
+    class="create-btn"
+    v-on:click="resetForm(); showModal = true"
+  >
     + Create Task
   </button>
-  <button class="export-btn" v-on:click="exportTasks">Export Tasks</button>
-  <div class="kanban-container">
-    <div 
-      v-for="(tasks, status) in columns" 
-      v-bind:key="status"
+
+  <button
+    v-if="config.allowExport"
+    class="export-btn"
+    v-on:click="handleExport"
+  >
+    Export Tasks
+  </button>
+
+  <div v-if="loading" class="kanban-loader">
+    <div class="spinner"></div>
+    <p>Loading tasks...</p>
+  </div>
+
+  <div v-else class="kanban-container">
+    <div
+      v-for="(tasks, status) in columns" :key="status"
       class="kanban-column"
     >
       <h2>{{ formatStatus(status) }}</h2>
@@ -187,24 +167,21 @@ onMounted(async () => {
         group="tasks"
         item-key="id"
         class="kanban-list"
-        v-on:change="onTaskMoved($event, status)"
+        @change="onTaskMoved($event, status)"
       >
         <template #item="{ element }">
           <div class="kanban-task">
             {{ element.title }}
-            <button 
-              class="edit-btn"
-              v-on:click="editTask(element)"
-            >✏️</button>
-            <button 
-              class="delete-btn"
-              v-on:click="deleteTask(element)"
-            >🗑️</button>
+
+            <button class="edit-btn" v-on:click="editTask(element)">✏️</button>
+            <button class="delete-btn" v-on:click="handleDelete(element)">🗑️</button>
           </div>
         </template>
       </draggable>
     </div>
   </div>
+
+  <!-- MODAL -->
   <div v-if="showModal" class="modal-overlay">
     <div class="modal-box">
       <h2>{{ modalTitle }}</h2>
@@ -224,7 +201,7 @@ onMounted(async () => {
 
       <div class="modal-actions">
         <button v-on:click="saveTask">{{ action }}</button>
-        <button v-on:click="showModal = false; resetForm();">Cancel</button>
+        <button v-on:click="showModal = false; resetForm()">Cancel</button>
       </div>
     </div>
   </div>
@@ -251,6 +228,30 @@ onMounted(async () => {
   border: 1px solid #ccc;
   padding: 8px;
   margin-bottom: 10px;
+}
+
+.kanban-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  gap: 10px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 h1 {

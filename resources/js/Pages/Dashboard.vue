@@ -1,13 +1,12 @@
 <script setup>
 import SidebarLayout from '@/Layouts/SidebarLayout.vue';
-import KanbanBoard from '@/Components/KanbanBoard.vue'
+import KanbanBoard from '@/Components/KanbanBoard.vue';
 import { Head } from '@inertiajs/vue3';
 
 const kanbanConfig = {
   title: "Development Workflow",
   allowExport: true,
   allowCreate: true,
-  colorTheme: "purple",
 };
 
 const handleTaskAction = ({ title, type }) => {
@@ -21,7 +20,6 @@ const handleTaskMoved = (taskTitle) => {
 
 <template>
     <Head title="Dashboard" />
-
     <SidebarLayout>
         <template #title>
             Dashboard
